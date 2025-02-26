@@ -103,14 +103,14 @@ def process_ply_file(ply_file_path):
         return None
 
 
-def save_matrix_to_json(matrix, filename='matrix_4_4.json'):
+def save_matrix_to_json(matrix, filename='matrix_4_4_ply.json'):
     matrix_data = {"matrix": matrix}
     with open(filename, 'w') as json_file:
         json.dump(matrix_data, json_file)
     logger.info(f"Matrix has been saved to {filename}")
 
 
-def get_rotation(ply_file_path, local_matrix_path='matrix_4_4.json'):
+def get_rotation(ply_file_path, local_matrix_path='matrix_4_4_ply.json'):
     matrix = process_ply_file(ply_file_path)
     if matrix:
         save_matrix_to_json(matrix, local_matrix_path)
@@ -121,5 +121,5 @@ def get_rotation(ply_file_path, local_matrix_path='matrix_4_4.json'):
 
 
 if __name__ == "__main__":
-     ply_file = "../ply/model_20990.ply"
+     ply_file = "ply/model_18567.ply"
      get_rotation(ply_file)

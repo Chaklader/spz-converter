@@ -8,7 +8,7 @@ def load_file(file_path: str) -> dict:
 
 def main():
     # Change the file path to your target model.
-    gs = load_file("ply/model_20991.ply")  
+    gs = load_file("ply/model_18567.ply")  
 
     spz_data = serialize_spz(gs)
     with open("gs1.spz", "wb") as f:
