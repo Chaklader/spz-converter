@@ -7,11 +7,12 @@ def load_file(file_path: str) -> dict:
             return load_ply(f)
 
 def main():
-    # Change the file path to your target model.
-    gs = load_file("ply/model_18567.ply")  
+    model_id = 18567
+    ply_file_path = f"ply/model_{model_id}.ply"
+    gs = load_file(ply_file_path)  
 
     spz_data = serialize_spz(gs)
-    with open("gs1.spz", "wb") as f:
+    with open(f"model_{model_id}.spz", "wb") as f:
         f.write(spz_data)
 
 if __name__ == '__main__':
