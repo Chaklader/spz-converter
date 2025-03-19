@@ -145,7 +145,7 @@ if __name__ == "__main__":
     """
     
     # Input PLY file
-    ply_file_path = 'ply/model_20869.ply'
+    ply_file_path = 'ply/model_18567.ply'
 
     # Process the PLY file
     logger.info(f"Processing PLY file: {ply_file_path}...")
