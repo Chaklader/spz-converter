@@ -7,7 +7,7 @@ def load_file(file_path: str) -> dict:
             return load_ply(f)
 
 def main():
-    model_id = 18567
+    model_id = 20991
     ply_file_path = f"ply/model_{model_id}.ply"
     gs = load_file(ply_file_path)  
 
