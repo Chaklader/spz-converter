@@ -25,24 +25,31 @@ def load_file(file_path: str) -> dict:
 
 def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_meters=0.2, alpha=0.1):
     # Load PLY file and extract positions
+    logger.info(f"Loading PLY file: {ply_file_path}")
     ply_data = load_file(ply_file_path)
     
     # Reshape positions from flat array to (n_points, 3)
     positions = np.array(ply_data["positions"]).reshape(-1, 3)
+    logger.info(f"Loaded {len(positions)} points from PLY file")
     
     # Project points to X-Z plane (setting Y=0)
     points_2d = positions[:, [0, 2]]  # Extract X and Z coordinates
+    logger.info(f"Projected points to X-Z plane")
     
     # Generate alpha shape
+    logger.info(f"Generating alpha shape boundary")
     alpha_values = [0.2, 0.15, 0.1, 0.05]
     alpha_shape = None
 
     for alpha in alpha_values:
         try:
+            logger.info(f"Trying alpha value: {alpha}")
             alpha_shape = alphashape.alphashape(points_2d, alpha)
             if isinstance(alpha_shape, (Polygon, MultiPolygon)):
+                logger.info(f"Successfully created boundary with alpha: {alpha}")
                 break
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Alpha value {alpha} failed: {str(e)}")
             continue
 
     if alpha_shape is None:
@@ -50,9 +57,11 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
 
     if isinstance(alpha_shape, Polygon):
         boundary_line = alpha_shape.exterior
+        logger.info(f"Created single polygon boundary")
     elif isinstance(alpha_shape, MultiPolygon):
         largest_polygon = max(alpha_shape.geoms, key=lambda p: p.area)
         boundary_line = largest_polygon.exterior
+        logger.info(f"Created multi-polygon boundary, selected largest polygon")
     else:
         raise ValueError("Unexpected geometry type")
 
@@ -61,12 +70,15 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     width = bounds[2] - bounds[0]
     height = bounds[3] - bounds[1]
     characteristic_size = (width + height) / 2
+    logger.info(f"Boundary dimensions - Width: {width:.2f}m, Height: {height:.2f}m")
 
     # Convert percentage to actual offset distance (negative for inward offset)
     offset_meters = characteristic_size * -(BOUNDARY_OFFSET_PERCENTAGE / 100.0)
+    logger.info(f"Applying inward offset of {abs(offset_meters):.2f}m ({BOUNDARY_OFFSET_PERCENTAGE}% of characteristic size)")
 
     boundary_length = boundary_line.length
     n_points = max(int(boundary_length / spacing_meters), 4)
+    logger.info(f"Boundary perimeter: {boundary_length:.2f}m, generating {n_points} boundary points")
 
     boundary_points = [boundary_line.interpolate(i / n_points, normalized=True)
                        for i in range(n_points)]
@@ -77,20 +89,24 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
         boundary_points_coords.append([point.x, point.y])
 
     boundary_points_coords = np.array(boundary_points_coords)
+    logger.info(f"Generated {len(boundary_points_coords)} original boundary points")
 
     # Calculate offset points
     offset_coords = None
     if offset_meters != 0:
+        logger.info(f"Calculating offset boundary")
         boundary_polygon = Polygon(boundary_points_coords)
         offset_polygon = boundary_polygon.buffer(offset_meters)
 
         if isinstance(offset_polygon, Polygon):
             offset_coords = np.array(offset_polygon.exterior.coords[:-1])
+            logger.info(f"Generated {len(offset_coords)} offset boundary points")
         else:
-            logger.warn("Warning: Offset resulted in invalid polygon")
+            logger.warning("Warning: Offset resulted in invalid polygon")
             offset_coords = None
 
     # Create visualization
+    logger.info(f"Creating visualization plot")
     plt.figure(figsize=(10, 10))
     plt.scatter(points_2d[:, 0], points_2d[:, 1],
                 color='green', s=5, alpha=0.5, label='PLY Points')
@@ -112,6 +128,7 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     image_filename = boundary_file.replace('.json', '.png')
     plt.savefig(image_filename)
     plt.close()
+    logger.info(f"Saved visualization to {image_filename}")
 
     # Save the offset coordinates with exactly 4 decimal places
     points_to_save = offset_coords if offset_coords is not None else boundary_points_coords
@@ -125,6 +142,7 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
 
     with open(boundary_file, 'w') as f:
         json.dump(output_data, f, indent=2)
+    logger.info(f"Saved {len(output_data)} boundary points to {boundary_file}")
 
 
 if __name__ == "__main__":
@@ -140,7 +158,7 @@ if __name__ == "__main__":
     """
     
     # Input PLY file
-    ply_file_path = 'ply/model_18567.ply'
+    ply_file_path = 'ply/model_20706.ply'
 
     # Process the PLY file
     logger.info(f"Processing PLY file: {ply_file_path}...")
