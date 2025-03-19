@@ -15,7 +15,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 np.random.seed(42)
 
-BOUNDARY_OFFSET_PERCENTAGE = 5  # 5% offset
+# Remove the offset percentage since we want the actual boundary
+# BOUNDARY_OFFSET_PERCENTAGE = 5  # 5% offset
 
 
 def load_file(file_path: str) -> dict:
@@ -38,7 +39,7 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     
     # Generate alpha shape
     logger.info(f"Generating alpha shape boundary")
-    alpha_values = [0.2, 0.15, 0.1, 0.05]
+    alpha_values = [0.01, 0.05, 0.1, 0.15, 0.2]  # Try tighter boundary first
     alpha_shape = None
 
     for alpha in alpha_values:
@@ -72,9 +73,9 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     characteristic_size = (width + height) / 2
     logger.info(f"Boundary dimensions - Width: {width:.2f}m, Height: {height:.2f}m")
 
-    # Convert percentage to actual offset distance (negative for inward offset)
-    offset_meters = characteristic_size * -(BOUNDARY_OFFSET_PERCENTAGE / 100.0)
-    logger.info(f"Applying inward offset of {abs(offset_meters):.2f}m ({BOUNDARY_OFFSET_PERCENTAGE}% of characteristic size)")
+    # We'll use no offset to get the actual boundary
+    offset_meters = 0
+    logger.info(f"Using actual boundary without inward offset")
 
     boundary_length = boundary_line.length
     n_points = max(int(boundary_length / spacing_meters), 4)
@@ -93,18 +94,8 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
 
     # Calculate offset points
     offset_coords = None
-    if offset_meters != 0:
-        logger.info(f"Calculating offset boundary")
-        boundary_polygon = Polygon(boundary_points_coords)
-        offset_polygon = boundary_polygon.buffer(offset_meters)
-
-        if isinstance(offset_polygon, Polygon):
-            offset_coords = np.array(offset_polygon.exterior.coords[:-1])
-            logger.info(f"Generated {len(offset_coords)} offset boundary points")
-        else:
-            logger.warning("Warning: Offset resulted in invalid polygon")
-            offset_coords = None
-
+    # Since we're not using an offset, we'll just use the original boundary points
+    
     # Create visualization
     logger.info(f"Creating visualization plot")
     plt.figure(figsize=(10, 10))
@@ -112,11 +103,7 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
                 color='green', s=5, alpha=0.5, label='PLY Points')
 
     plt.scatter(boundary_points_coords[:, 0], boundary_points_coords[:, 1],
-                color='red', s=50, label='Boundary Points')
-
-    if offset_coords is not None:
-        plt.scatter(offset_coords[:, 0], offset_coords[:, 1],
-                    color='purple', s=50, label='Offset Boundary')
+                color='purple', s=50, label='Boundary Points')
 
     plt.title('PLY Points and Boundary (Top View)')
     plt.xlabel('X (meters)')
@@ -130,8 +117,8 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     plt.close()
     logger.info(f"Saved visualization to {image_filename}")
 
-    # Save the offset coordinates with exactly 4 decimal places
-    points_to_save = offset_coords if offset_coords is not None else boundary_points_coords
+    # Save the coordinates with exactly 4 decimal places - use original boundary points
+    points_to_save = boundary_points_coords
     output_data = [
         {
             "x": format(point[0], '.4f'),
@@ -158,7 +145,7 @@ if __name__ == "__main__":
     """
     
     # Input PLY file
-    ply_file_path = 'ply/model_20706.ply'
+    ply_file_path = 'ply/model_20869.ply'
 
     # Process the PLY file
     logger.info(f"Processing PLY file: {ply_file_path}...")
