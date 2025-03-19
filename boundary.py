@@ -4,6 +4,7 @@ from shapely.geometry import Polygon, MultiPolygon
 import alphashape
 import matplotlib.pyplot as plt
 import logging
+from spz_py.ply_loader import load_ply
 
 # Configure your logger
 logging.basicConfig(
@@ -17,43 +18,28 @@ np.random.seed(42)
 BOUNDARY_OFFSET_PERCENTAGE = 5  # 5% offset
 
 
-def generate_boundary_points_from_transforms(transform_file, boundary_file, camera_file, spacing_meters=0.2, alpha=0.1):
-    with open(transform_file, 'r') as f:
-        transforms = json.load(f)
+def load_file(file_path: str) -> dict:
+    with open(file_path, 'rb') as f:
+        return load_ply(f)
 
-    # Save camera positions and rotations with exactly 4 decimal places
-    camera_data = []
-    for frame in transforms['frames']:
-        matrix = frame['transform_matrix']
-        camera_data.append({
-            "position": {
-                "x": format(matrix[0][3], '.4f'),
-                "y": format(matrix[1][3], '.4f'),
-                "z": format(matrix[2][3], '.4f')
-            },
-            "rotation": [
-                [format(matrix[0][0], '.4f'), format(matrix[0][1], '.4f'), format(matrix[0][2], '.4f')],
-                [format(matrix[1][0], '.4f'), format(matrix[1][1], '.4f'), format(matrix[1][2], '.4f')],
-                [format(matrix[2][0], '.4f'), format(matrix[2][1], '.4f'), format(matrix[2][2], '.4f')]
-            ]
-        })
 
-    with open(camera_file, 'w') as f:
-        json.dump(camera_data, f, indent=2)
-
-    # Extract positions for boundary calculation
-    points = np.array([
-        [frame['transform_matrix'][0][3], frame['transform_matrix'][1][3], frame['transform_matrix'][2][3]]
-        for frame in transforms['frames']
-    ])
-
+def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_meters=0.2, alpha=0.1):
+    # Load PLY file and extract positions
+    ply_data = load_file(ply_file_path)
+    
+    # Reshape positions from flat array to (n_points, 3)
+    positions = np.array(ply_data["positions"]).reshape(-1, 3)
+    
+    # Project points to X-Z plane (setting Y=0)
+    points_2d = positions[:, [0, 2]]  # Extract X and Z coordinates
+    
     # Generate alpha shape
     alpha_values = [0.2, 0.15, 0.1, 0.05]
     alpha_shape = None
 
     for alpha in alpha_values:
         try:
-            alpha_shape = alphashape.alphashape(points[:, [0, 2]], alpha)
+            alpha_shape = alphashape.alphashape(points_2d, alpha)
             if isinstance(alpha_shape, (Polygon, MultiPolygon)):
                 break
         except Exception:
@@ -106,8 +92,8 @@ def generate_boundary_points_from_transforms(transform_file, boundary_file, came
 
     # Create visualization
     plt.figure(figsize=(10, 10))
-    plt.scatter(points[:, 0], points[:, 2],
-                color='green', s=50, label='Camera Positions')
+    plt.scatter(points_2d[:, 0], points_2d[:, 1],
+                color='green', s=5, alpha=0.5, label='PLY Points')
 
     plt.scatter(boundary_points_coords[:, 0], boundary_points_coords[:, 1],
                 color='red', s=50, label='Boundary Points')
@@ -116,7 +102,7 @@ def generate_boundary_points_from_transforms(transform_file, boundary_file, came
         plt.scatter(offset_coords[:, 0], offset_coords[:, 1],
                     color='purple', s=50, label='Offset Boundary')
 
-    plt.title('Camera and User Positions (Top View)')
+    plt.title('PLY Points and Boundary (Top View)')
     plt.xlabel('X (meters)')
     plt.ylabel('Z (meters)')
     plt.legend()
@@ -143,33 +129,30 @@ def generate_boundary_points_from_transforms(transform_file, boundary_file, came
 
 if __name__ == "__main__":
     """
-    This script processes camera transforms and generates several output files:
+    This script processes PLY model points and generates boundary files:
     
     Input:
-    - transforms.json: Contains camera transformation matrices
+    - PLY file: Contains 3D point data
     
     Output:
     - boundary.json: Contains the calculated boundary points
-    - cameras.json: Contains processed camera positions and rotations
-    - boundary.png: Visualization of camera positions and boundary points
+    - boundary.png: Visualization of PLY points and boundary
     """
     
-    # Input transforms file
-    transform_file = 'transforms.json'
+    # Input PLY file
+    ply_file_path = 'ply/model_18567.ply'
 
-    # Process the transforms file
-    logger.info("Processing transforms file...")
+    # Process the PLY file
+    logger.info(f"Processing PLY file: {ply_file_path}...")
     try:
-        generate_boundary_points_from_transforms(
-            transform_file,
+        generate_boundary_points_from_ply(
+            ply_file_path,
             boundary_file='boundary.json',
-            camera_file='cameras.json',
             spacing_meters=0.2
         )
         logger.info("✓ Processing completed")
         logger.info("Generated files:")
         logger.info("- boundary.json: Contains boundary coordinates")
-        logger.info("- cameras.json: Contains camera positions and rotations")
         logger.info("- boundary.png: Visualization plot")
     except Exception as e:
         logger.error(f"✗ Error processing: {str(e)}")
