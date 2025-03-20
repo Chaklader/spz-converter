@@ -549,32 +549,65 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     
     # Create visualization
     logger.info(f"Creating visualization plot")
-    plt.figure(figsize=(10, 10))
     
-    # Plot the original points in light gray
-    plt.scatter(rotated_positions[:, 0], rotated_positions[:, 2],
-                color='orange', s=1, alpha=0.2, label='Original Points')
+    # Calculate the bounds with a buffer for better plotting
+    min_x = min(np.min(filtered_points_2d[:, 0]), np.min(boundary_points_coords[:, 0]))
+    max_x = max(np.max(filtered_points_2d[:, 0]), np.max(boundary_points_coords[:, 0]))
+    min_z = min(np.min(filtered_points_2d[:, 1]), np.min(boundary_points_coords[:, 1]))
+    max_z = max(np.max(filtered_points_2d[:, 1]), np.max(boundary_points_coords[:, 1]))
+    
+    # Calculate center and span
+    center_x = (min_x + max_x) / 2
+    center_z = (min_z + max_z) / 2
+    span_x = max_x - min_x
+    span_z = max_z - min_z
+    
+    # Add a buffer around the building (30% padding)
+    buffer_factor = 0.3
+    min_x = center_x - span_x/2 * (1 + buffer_factor)
+    max_x = center_x + span_x/2 * (1 + buffer_factor)
+    min_z = center_z - span_z/2 * (1 + buffer_factor)
+    max_z = center_z + span_z/2 * (1 + buffer_factor)
+    
+    # Create a high-quality figure
+    plt.figure(figsize=(12, 10), dpi=150)
+    
+    # Plot only a subset of original points to reduce clutter (sample 10%)
+    sample_indices = np.random.choice(len(rotated_positions), size=min(len(rotated_positions) // 10, 5000), replace=False)
+    plt.scatter(rotated_positions[sample_indices, 0], rotated_positions[sample_indices, 2],
+                color='yellow', s=1.5, alpha=0.15, label='Original Points')
     
     # Plot the filtered points in green
     plt.scatter(filtered_points_2d[:, 0], filtered_points_2d[:, 1],
-                color='green', s=5, alpha=0.5, label='Filtered Points')
+                color='#0BDA47', s=6, alpha=0.6, label='Filtered Points')
 
     x = boundary_points_coords[:, 0]
     y = boundary_points_coords[:, 1]
 
+    # Plot the boundary as a bold line
     plt.plot(np.append(x, x[0]), np.append(y, y[0]), 
-             color='purple', linewidth=2, linestyle='-', label='Boundary')
-
-
-    plt.title('PLY Points and Boundary (Top View)')
-    plt.xlabel('X (meters)')
-    plt.ylabel('Z (meters)')
-    plt.legend()
+             color='#57B9FF', linewidth=3, linestyle='-', label='Boundary')
+    
+    # Add reference point markers at corners for clarity
+    plt.scatter(x, y, color='darkblue', s=25, alpha=0.8, zorder=5)
+    
+    # Improve plot aesthetics
+    plt.title('Building Boundary from Point Cloud (Top View)', fontsize=16, fontweight='bold')
+    plt.xlabel('X (meters)', fontsize=14)
+    plt.ylabel('Z (meters)', fontsize=14)
+    plt.grid(True, alpha=0.3, linestyle='--')
+    plt.legend(loc='upper right', fontsize=12)
+    
+    # Set fixed aspect ratio (1:1)
     plt.axis('equal')
+    
+    # Focus on the building by setting plot limits
+    plt.xlim(min_x, max_x)
+    plt.ylim(min_z, max_z)
 
-    # Save the plot
+    # Save the plot with high resolution
     image_filename = boundary_file.replace('.json', '.png')
-    plt.savefig(image_filename)
+    plt.savefig(image_filename, dpi=150, bbox_inches='tight')
     plt.close()
     logger.info(f"Saved visualization to {image_filename}")
 
