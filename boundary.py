@@ -553,19 +553,18 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
     
     # Plot the original points in light gray
     plt.scatter(rotated_positions[:, 0], rotated_positions[:, 2],
-                color='lightgray', s=1, alpha=0.2, label='Original Points')
+                color='orange', s=1, alpha=0.2, label='Original Points')
     
     # Plot the filtered points in green
     plt.scatter(filtered_points_2d[:, 0], filtered_points_2d[:, 1],
                 color='green', s=5, alpha=0.5, label='Filtered Points')
 
-    plt.scatter(boundary_points_coords[:, 0], boundary_points_coords[:, 1],
-                color='red', s=50, label='Boundary Points')
+    x = boundary_points_coords[:, 0]
+    y = boundary_points_coords[:, 1]
 
-    # No offset boundary to display
-    # if offset_coords is not None:
-    #     plt.scatter(offset_coords[:, 0], offset_coords[:, 1],
-    #                 color='purple', s=50, label='Offset Boundary')
+    plt.plot(np.append(x, x[0]), np.append(y, y[0]), 
+             color='purple', linewidth=2, linestyle='-', label='Boundary')
+
 
     plt.title('PLY Points and Boundary (Top View)')
     plt.xlabel('X (meters)')
