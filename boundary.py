@@ -15,7 +15,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 np.random.seed(42)
 
 rotation_file_path = 'matrix_4_4.json'
@@ -60,7 +60,7 @@ def select_filtering_parameters(points_2d, positions):
     Select appropriate filtering parameters based on point cloud characteristics.
     Automatically detects building type and recommends filtering parameters.
     """
-    logger.info("Analyzing point cloud to determine building characteristics...")
+    log.info("Analyzing point cloud to determine building characteristics...")
     
     point_count = len(points_2d)
     area = calculate_rough_area(points_2d)
@@ -125,43 +125,43 @@ def select_filtering_parameters(points_2d, positions):
         params["building_type"] = "apartment" 
         params["sor_k"] = 30
         params["height_tolerance"] = 2.0
-        logger.info(f"Detected building type: Apartment/Tall Building (height: {height_range:.1f}m)")
+        log.info(f"Detected building type: Apartment/Tall Building (height: {height_range:.1f}m)")
     
     elif area > 1000 and height_range < 10:
         params["building_type"] = "industrial"
         params["sor_k"] = 25
         params["sor_std_ratio"] = 2.5
         params["density_threshold"] = 0.3
-        logger.info(f"Detected building type: Industrial/Commercial (area: {area:.1f}m²)")
+        log.info(f"Detected building type: Industrial/Commercial (area: {area:.1f}m²)")
     
     elif regular_geometry and height_range < 8:
         params["building_type"] = "greenhouse"
         params["sor_k"] = 15
         params["sor_std_ratio"] = 1.8
-        logger.info("Detected building type: Greenhouse/Regular Structure")
+        log.info("Detected building type: Greenhouse/Regular Structure")
     
     elif has_internal_gaps and area > 300:
         params["building_type"] = "complex_residential"
         params["preserve_internal_gaps"] = True
         params["sor_k"] = 20
-        logger.info("Detected building type: Complex Residential (with courtyards/pools)")
+        log.info("Detected building type: Complex Residential (with courtyards/pools)")
     
     elif has_distinct_levels and height_range < 12:
         params["building_type"] = "multi_level_house"
         params["sor_k"] = 20
-        logger.info("Detected building type: Multi-level House")
+        log.info("Detected building type: Multi-level House")
     
     elif area < 300 and height_range < 10:
         params["building_type"] = "house"
         params["sor_k"] = 15
-        logger.info("Detected building type: House/Small Building")
+        log.info("Detected building type: House/Small Building")
 
     else:
         params["building_type"] = "general"
-        logger.info("Detected building type: General Structure")
+        log.info("Detected building type: General Structure")
 
-    logger.info(f"Point cloud statistics: {point_count} points, {area:.1f}m² area, {height_range:.1f}m height")
-    logger.info(f"Selected parameters: k={params['sor_k']}, std_ratio={params['sor_std_ratio']}")
+    log.info(f"Point cloud statistics: {point_count} points, {area:.1f}m² area, {height_range:.1f}m height")
+    log.info(f"Selected parameters: k={params['sor_k']}, std_ratio={params['sor_std_ratio']}")
     
     return params
 
@@ -177,7 +177,7 @@ def apply_rotation_matrix(positions, matrix):
     Returns:
         Nx3 array of rotated positions
     """
-    logger.info(f"Applying rotation correction to {len(positions)} points")
+    log.info(f"Applying rotation correction to {len(positions)} points")
     
     matrix_4x4 = np.array(matrix).reshape(4, 4)
     rotation_matrix = matrix_4x4[:3, :3]
@@ -186,7 +186,7 @@ def apply_rotation_matrix(positions, matrix):
     for i in range(len(positions)):
         rotated_positions[i] = rotation_matrix.dot(positions[i])
     
-    logger.info("Rotation correction applied")
+    log.info("Rotation correction applied")
     return rotated_positions
 
 
@@ -198,7 +198,7 @@ def remove_statistical_outliers(points_2d, positions, k=20, std_ratio=2.0):
     - k: Number of neighbors to analyze
     - std_ratio: Standard deviation threshold
     """
-    logger.info(f"First pass: Removing statistical outliers (k={k}, std_ratio={std_ratio})...")
+    log.info(f"First pass: Removing statistical outliers (k={k}, std_ratio={std_ratio})...")
     
     start_count = len(points_2d)
     
@@ -207,7 +207,7 @@ def remove_statistical_outliers(points_2d, positions, k=20, std_ratio=2.0):
     distances, _ = tree.query(points_2d, k=min(k+1, len(points_2d)))
     
     if distances.shape[1] < k+1:
-        logger.warning(f"Not enough points for k={k}, using k={distances.shape[1]-1} instead")
+        log.warning(f"Not enough points for k={k}, using k={distances.shape[1]-1} instead")
         k = distances.shape[1] - 1
     
     distances = distances[:, 1:]
@@ -226,7 +226,7 @@ def remove_statistical_outliers(points_2d, positions, k=20, std_ratio=2.0):
     removed_count = start_count - len(filtered_points_2d)
     removal_percentage = (removed_count / start_count) * 100 if start_count > 0 else 0
     
-    logger.info(f"Removed {removed_count} statistical outliers ({removal_percentage:.2f}%)")
+    log.info(f"Removed {removed_count} statistical outliers ({removal_percentage:.2f}%)")
     
     return filtered_points_2d, filtered_positions
 
@@ -238,7 +238,7 @@ def apply_conditional_filters(points_2d, positions, params):
     - positions: Nx3 array of original 3D positions from first pass
     - params: Parameters dict from select_filtering_parameters
     """
-    logger.info(f"Second pass: Applying conditional filters for {params['building_type']} type...")
+    log.info(f"Second pass: Applying conditional filters for {params['building_type']} type...")
     
     start_count = len(points_2d)
     building_type = params['building_type']
@@ -246,7 +246,7 @@ def apply_conditional_filters(points_2d, positions, params):
     y_values = positions[:, 1]
     
     ground_level = estimate_ground_level(y_values)
-    logger.info(f"Estimated ground level: {ground_level:.2f}m")
+    log.info(f"Estimated ground level: {ground_level:.2f}m")
     
     if building_type == "apartment" or building_type == "multi_level_house":
         max_height = np.percentile(y_values, 98) + params['height_tolerance']
@@ -257,7 +257,7 @@ def apply_conditional_filters(points_2d, positions, params):
     else:
         max_height = np.percentile(y_values, 95) + params['height_tolerance']
     
-    logger.info(f"Maximum valid height: {max_height:.2f}m")
+    log.info(f"Maximum valid height: {max_height:.2f}m")
     
     height_mask = (y_values >= (ground_level - params['ground_tolerance'])) & (y_values <= max_height)
     
@@ -283,7 +283,7 @@ def apply_conditional_filters(points_2d, positions, params):
     removed_count = start_count - len(filtered_points_2d)
     removal_percentage = (removed_count / start_count) * 100 if start_count > 0 else 0
     
-    logger.info(f"Removed {removed_count} points with conditional filters ({removal_percentage:.2f}%)")
+    log.info(f"Removed {removed_count} points with conditional filters ({removal_percentage:.2f}%)")
     
     return filtered_points_2d, filtered_positions
 
@@ -300,19 +300,19 @@ def filter_point_cloud_with_open3d(positions, nb_neighbors=20, std_ratio=2.0):
     Returns:
         Nx3 array of filtered positions and corresponding 2D points (X,Z)
     """
-    logger.info(f"Starting Open3D point cloud filtering with {len(positions)} points...")
+    log.info(f"Starting Open3D point cloud filtering with {len(positions)} points...")
     
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(positions)
     
-    logger.info(f"Applying statistical outlier removal with nb_neighbors={nb_neighbors}, std_ratio={std_ratio}")
+    log.info(f"Applying statistical outlier removal with nb_neighbors={nb_neighbors}, std_ratio={std_ratio}")
     filtered_pcd, _ = pcd.remove_statistical_outlier(
         nb_neighbors=nb_neighbors, 
         std_ratio=std_ratio
     )
     
     filtered_positions = np.asarray(filtered_pcd.points)
-    logger.info(f"Filtered to {len(filtered_positions)} points")
+    log.info(f"Filtered to {len(filtered_positions)} points")
     
     filtered_points_2d = filtered_positions[:, [0, 2]]
     
@@ -329,20 +329,20 @@ def read_rotation_matrix(matrix_file_path=rotation_file_path):
     Returns:
         list: The 4x4 rotation matrix as a flattened list
     """
-    logger.info(f"Reading rotation matrix from {matrix_file_path}")
+    log.info(f"Reading rotation matrix from {matrix_file_path}")
     try:
         with open(matrix_file_path, 'r') as json_file:
             matrix_data = json.load(json_file)
             return matrix_data["matrix"]
     except Exception as e:
-        logger.error(f"Error reading matrix file: {e}")
-        logger.info("Using identity matrix as fallback")
+        log.error(f"Error reading matrix file: {e}")
+        log.info("Using identity matrix as fallback")
         return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
 
 def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_meters=0.2, alpha=0.1):
     try:
-        logger.info(f"Loading PLY file: {ply_file_path}")
+        log.info(f"Loading PLY file: {ply_file_path}")
         ply_data = load_file(ply_file_path)
         positions = np.array(ply_data["positions"]).reshape(-1, 3)
         
@@ -350,10 +350,10 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
         rotated_positions = apply_rotation_matrix(positions, rotation_matrix)
         
         point_count = len(rotated_positions)
-        logger.info(f"Loaded {point_count} points from PLY file")
+        log.info(f"Loaded {point_count} points from PLY file")
         
         if point_count < 10:
-            logger.error(f"Too few points in PLY file: {point_count}")
+            log.error(f"Too few points in PLY file: {point_count}")
             return False
         
         points_2d = rotated_positions[:, [0, 2]]
@@ -363,7 +363,7 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
         area = x_range * z_range
         height_range = np.max(rotated_positions[:, 1]) - np.min(rotated_positions[:, 1])
         
-        logger.info(f"Building statistics: {point_count} points, {area:.1f}m² area, {height_range:.1f}m height")
+        log.info(f"Building statistics: {point_count} points, {area:.1f}m² area, {height_range:.1f}m height")
         
         nb_neighbors = 20 
         std_ratio = 2.0   
@@ -371,22 +371,22 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
         if area > 1000 and height_range > 15:
             nb_neighbors = 30
             std_ratio = 2.2
-            logger.info("Detected building type: Apartment/Large Building")
+            log.info("Detected building type: Apartment/Large Building")
         elif area > 800 and height_range < 15:
             nb_neighbors = 25
             std_ratio = 2.0
-            logger.info("Detected building type: Industrial/Commercial")
+            log.info("Detected building type: Industrial/Commercial")
             nb_neighbors = 25
             std_ratio = 2.0
-            logger.info("Detected building type: Industrial/Commercial")
+            log.info("Detected building type: Industrial/Commercial")
         elif area < 300 and height_range < 10:
             nb_neighbors = 15
             std_ratio = 1.8
-            logger.info("Detected building type: House/Small Building")
+            log.info("Detected building type: House/Small Building")
         else:
-            logger.info("Detected building type: General Structure")
+            log.info("Detected building type: General Structure")
         
-        logger.info(f"Selected filtering parameters: nb_neighbors={nb_neighbors}, std_ratio={std_ratio}")
+        log.info(f"Selected filtering parameters: nb_neighbors={nb_neighbors}, std_ratio={std_ratio}")
         
         try:
             filtered_points_2d, _ = filter_point_cloud_with_open3d(
@@ -395,62 +395,62 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
                 std_ratio=std_ratio
             )
         except Exception as e:
-            logger.error(f"Error in point cloud filtering: {str(e)}")
-            logger.info("Using original points without filtering")
+            log.error(f"Error in point cloud filtering: {str(e)}")
+            log.info("Using original points without filtering")
             filtered_points_2d = points_2d
         
         if len(filtered_points_2d) < 3:
-            logger.error("Not enough points for boundary generation after filtering")
-            logger.info("Using original points without filtering")
+            log.error("Not enough points for boundary generation after filtering")
+            log.info("Using original points without filtering")
             filtered_points_2d = points_2d
             
             if len(filtered_points_2d) < 3:
-                logger.error("Not enough points for boundary generation even in original data")
+                log.error("Not enough points for boundary generation even in original data")
                 return False
         
-        logger.info(f"Using {len(filtered_points_2d)} filtered points for boundary generation")
+        log.info(f"Using {len(filtered_points_2d)} filtered points for boundary generation")
 
-        logger.info(f"Generating alpha shape boundary")
+        log.info(f"Generating alpha shape boundary")
         alpha_values = [0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5]
         alpha_shape = None
 
         for alpha in alpha_values:
             try:
-                logger.info(f"Trying alpha value: {alpha}")
+                log.info(f"Trying alpha value: {alpha}")
                 alpha_shape = alphashape.alphashape(filtered_points_2d, alpha)
                 if isinstance(alpha_shape, (Polygon, MultiPolygon)):
-                    logger.info(f"Successfully created boundary with alpha: {alpha}")
+                    log.info(f"Successfully created boundary with alpha: {alpha}")
                     break
             except Exception as e:
-                logger.warning(f"Alpha value {alpha} failed: {str(e)}")
+                log.warning(f"Alpha value {alpha} failed: {str(e)}")
                 continue
 
         if alpha_shape is None:
-            logger.error("Could not generate valid boundary with any alpha value")
+            log.error("Could not generate valid boundary with any alpha value")
             return False
 
         try:
             if isinstance(alpha_shape, Polygon):
                 boundary_line = alpha_shape.exterior
-                logger.info(f"Created single polygon boundary")
+                log.info(f"Created single polygon boundary")
             elif isinstance(alpha_shape, MultiPolygon):
                 largest_polygon = max(alpha_shape.geoms, key=lambda p: p.area)
                 boundary_line = largest_polygon.exterior
-                logger.info(f"Created multi-polygon boundary, selected largest polygon")
+                log.info(f"Created multi-polygon boundary, selected largest polygon")
             else:
-                logger.error(f"Unexpected geometry type: {type(alpha_shape)}")
+                log.error(f"Unexpected geometry type: {type(alpha_shape)}")
                 return False
 
             bounds = alpha_shape.bounds
             width = bounds[2] - bounds[0]
             height = bounds[3] - bounds[1]
-            logger.info(f"Boundary dimensions - Width: {width:.2f}m, Height: {height:.2f}m")
+            log.info(f"Boundary dimensions - Width: {width:.2f}m, Height: {height:.2f}m")
 
-            logger.info(f"Using actual boundary without inward offset")
+            log.info(f"Using actual boundary without inward offset")
 
             boundary_length = boundary_line.length
             n_points = max(int(boundary_length / spacing_meters), 4)
-            logger.info(f"Boundary perimeter: {boundary_length:.2f}m, generating {n_points} boundary points")
+            log.info(f"Boundary perimeter: {boundary_length:.2f}m, generating {n_points} boundary points")
 
             boundary_points = [boundary_line.interpolate(i / n_points, normalized=True)
                             for i in range(n_points)]
@@ -460,13 +460,13 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
                 boundary_points_coords.append([point.x, point.y])
 
             boundary_points_coords = np.array(boundary_points_coords)
-            logger.info(f"Generated {len(boundary_points_coords)} original boundary points")
+            log.info(f"Generated {len(boundary_points_coords)} original boundary points")
         except Exception as e:
-            logger.error(f"Error processing boundary geometry: {str(e)}")
+            log.error(f"Error processing boundary geometry: {str(e)}")
             return False
             
         try:
-            logger.info(f"Creating visualization plot")
+            log.info(f"Creating visualization plot")
             
             min_x = min(np.min(filtered_points_2d[:, 0]), np.min(boundary_points_coords[:, 0]))
             max_x = max(np.max(filtered_points_2d[:, 0]), np.max(boundary_points_coords[:, 0]))
@@ -515,9 +515,9 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
             image_filename = boundary_file.replace('.json', '.png')
             plt.savefig(image_filename, dpi=150, bbox_inches='tight')
             plt.close()
-            logger.info(f"Saved visualization to {image_filename}")
+            log.info(f"Saved visualization to {image_filename}")
         except Exception as e:
-            logger.error(f"Error creating visualization: {str(e)}")
+            log.error(f"Error creating visualization: {str(e)}")
             # Continue even if visualization fails
 
         try:
@@ -532,14 +532,14 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
 
             with open(boundary_file, 'w') as f:
                 json.dump(output_data, f, indent=2)
-            logger.info(f"Saved {len(output_data)} boundary points to {boundary_file}")
+            log.info(f"Saved {len(output_data)} boundary points to {boundary_file}")
             return True
         except Exception as e:
-            logger.error(f"Error saving boundary file: {str(e)}")
+            log.error(f"Error saving boundary file: {str(e)}")
             return False
             
     except Exception as e:
-        logger.error(f"Unexpected error in boundary generation: {str(e)}")
+        log.error(f"Unexpected error in boundary generation: {str(e)}")
         return False
 
 
@@ -569,16 +569,16 @@ if __name__ == "__main__":
     alpha values if boundary generation fails with the initial values.
     """
 
-    logger.info(f"Processing PLY file: {ply_file_path}...")
+    log.info(f"Processing PLY file: {ply_file_path}...")
     try:
         generate_boundary_points_from_ply(
             ply_file_path,
             boundary_file='boundary.json',
             spacing_meters=0.2
         )
-        logger.info("✓ Processing completed")
-        logger.info("Generated files:")
-        logger.info("- boundary.json: Contains boundary coordinates")
-        logger.info("- boundary.png: Visualization plot")
+        log.info("✓ Processing completed")
+        log.info("Generated files:")
+        log.info("- boundary.json: Contains boundary coordinates")
+        log.info("- boundary.png: Visualization plot")
     except Exception as e:
-        logger.error(f"Error processing PLY file: {str(e)}")
+        log.error(f"Error processing PLY file: {str(e)}")
