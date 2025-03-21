@@ -316,7 +316,7 @@ def filter_point_cloud_with_open3d(positions, nb_neighbors=20, std_ratio=2.0):
     return filtered_points_2d, filtered_positions
 
 
-def read_rotation_matrix(matrix_file_path=MATRIX_FILE_PATH):
+def read_rotation_matrix(matrix_file_path=rotation_file_path):
     """
     Read rotation matrix from a JSON file.
     
@@ -338,183 +338,235 @@ def read_rotation_matrix(matrix_file_path=MATRIX_FILE_PATH):
 
 
 def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_meters=0.2, alpha=0.1):
-    logger.info(f"Loading PLY file: {ply_file_path}")
-    ply_data = load_file(ply_file_path)
-    
-    positions = np.array(ply_data["positions"]).reshape(-1, 3)
-    logger.info(f"Loaded {len(positions)} points from PLY file")
-    
-    rotation_matrix = read_rotation_matrix()
-    
-    rotated_positions = apply_rotation_matrix(positions, rotation_matrix)
-    logger.info(f"Applied rotation correction to {len(rotated_positions)} points")
-    
-    logger.info("Applying point cloud filtering with Open3D...")
-    
-    point_count = len(rotated_positions)
-    x_range = np.max(rotated_positions[:, 0]) - np.min(rotated_positions[:, 0])
-    z_range = np.max(rotated_positions[:, 2]) - np.min(rotated_positions[:, 2])
-    area = x_range * z_range
-    height_range = np.max(rotated_positions[:, 1]) - np.min(rotated_positions[:, 1])
-    
-    logger.info(f"Building statistics: {point_count} points, {area:.1f}m² area, {height_range:.1f}m height")
-    
-    nb_neighbors = 20 
-    std_ratio = 2.0   
-    
-    if area > 1000 and height_range > 15:
-        nb_neighbors = 30
-        std_ratio = 2.2
-        logger.info("Detected building type: Apartment/Large Building")
-    elif area > 800 and height_range < 15:
-        nb_neighbors = 25
-        std_ratio = 2.0
-        logger.info("Detected building type: Industrial/Commercial")
-        nb_neighbors = 25
-        std_ratio = 2.0
-        logger.info("Detected building type: Industrial/Commercial")
-    elif area < 300 and height_range < 10:
-        nb_neighbors = 15
-        std_ratio = 1.8
-        logger.info("Detected building type: House/Small Building")
-    else:
-        logger.info("Detected building type: General Structure")
-    
-    logger.info(f"Selected filtering parameters: nb_neighbors={nb_neighbors}, std_ratio={std_ratio}")
-    
-    filtered_points_2d, _ = filter_point_cloud_with_open3d(
-        rotated_positions, 
-        nb_neighbors=nb_neighbors,
-        std_ratio=std_ratio
-    )
-    
-    logger.info(f"Using {len(filtered_points_2d)} filtered points for boundary generation")
-
-    logger.info(f"Generating alpha shape boundary")
-    alpha_values = [0.01, 0.05, 0.1, 0.15, 0.2]  # Try tighter boundary first
-    alpha_shape = None
-
-    for alpha in alpha_values:
+    try:
+        logger.info(f"Loading PLY file: {ply_file_path}")
+        ply_data = load_file(ply_file_path)
+        positions = np.array(ply_data["positions"]).reshape(-1, 3)
+        
+        rotation_matrix = read_rotation_matrix()
+        rotated_positions = apply_rotation_matrix(positions, rotation_matrix)
+        
+        point_count = len(rotated_positions)
+        logger.info(f"Loaded {point_count} points from PLY file")
+        
+        if point_count < 10:
+            logger.error(f"Too few points in PLY file: {point_count}")
+            return False
+        
+        points_2d = rotated_positions[:, [0, 2]]
+        
+        x_range = np.max(points_2d[:, 0]) - np.min(points_2d[:, 0])
+        z_range = np.max(points_2d[:, 1]) - np.min(points_2d[:, 1])
+        area = x_range * z_range
+        height_range = np.max(rotated_positions[:, 1]) - np.min(rotated_positions[:, 1])
+        
+        logger.info(f"Building statistics: {point_count} points, {area:.1f}m² area, {height_range:.1f}m height")
+        
+        nb_neighbors = 20 
+        std_ratio = 2.0   
+        
+        if area > 1000 and height_range > 15:
+            nb_neighbors = 30
+            std_ratio = 2.2
+            logger.info("Detected building type: Apartment/Large Building")
+        elif area > 800 and height_range < 15:
+            nb_neighbors = 25
+            std_ratio = 2.0
+            logger.info("Detected building type: Industrial/Commercial")
+            nb_neighbors = 25
+            std_ratio = 2.0
+            logger.info("Detected building type: Industrial/Commercial")
+        elif area < 300 and height_range < 10:
+            nb_neighbors = 15
+            std_ratio = 1.8
+            logger.info("Detected building type: House/Small Building")
+        else:
+            logger.info("Detected building type: General Structure")
+        
+        logger.info(f"Selected filtering parameters: nb_neighbors={nb_neighbors}, std_ratio={std_ratio}")
+        
         try:
-            logger.info(f"Trying alpha value: {alpha}")
-            alpha_shape = alphashape.alphashape(filtered_points_2d, alpha)
-            if isinstance(alpha_shape, (Polygon, MultiPolygon)):
-                logger.info(f"Successfully created boundary with alpha: {alpha}")
-                break
+            filtered_points_2d, _ = filter_point_cloud_with_open3d(
+                rotated_positions, 
+                nb_neighbors=nb_neighbors,
+                std_ratio=std_ratio
+            )
         except Exception as e:
-            logger.warning(f"Alpha value {alpha} failed: {str(e)}")
-            continue
+            logger.error(f"Error in point cloud filtering: {str(e)}")
+            logger.info("Using original points without filtering")
+            filtered_points_2d = points_2d
+        
+        if len(filtered_points_2d) < 3:
+            logger.error("Not enough points for boundary generation after filtering")
+            logger.info("Using original points without filtering")
+            filtered_points_2d = points_2d
+            
+            if len(filtered_points_2d) < 3:
+                logger.error("Not enough points for boundary generation even in original data")
+                return False
+        
+        logger.info(f"Using {len(filtered_points_2d)} filtered points for boundary generation")
 
-    if alpha_shape is None:
-        raise ValueError("Could not generate valid boundary with any alpha value")
+        logger.info(f"Generating alpha shape boundary")
+        alpha_values = [0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5]
+        alpha_shape = None
 
-    if isinstance(alpha_shape, Polygon):
-        boundary_line = alpha_shape.exterior
-        logger.info(f"Created single polygon boundary")
-    elif isinstance(alpha_shape, MultiPolygon):
-        largest_polygon = max(alpha_shape.geoms, key=lambda p: p.area)
-        boundary_line = largest_polygon.exterior
-        logger.info(f"Created multi-polygon boundary, selected largest polygon")
-    else:
-        raise ValueError("Unexpected geometry type")
+        for alpha in alpha_values:
+            try:
+                logger.info(f"Trying alpha value: {alpha}")
+                alpha_shape = alphashape.alphashape(filtered_points_2d, alpha)
+                if isinstance(alpha_shape, (Polygon, MultiPolygon)):
+                    logger.info(f"Successfully created boundary with alpha: {alpha}")
+                    break
+            except Exception as e:
+                logger.warning(f"Alpha value {alpha} failed: {str(e)}")
+                continue
 
-    bounds = alpha_shape.bounds
-    width = bounds[2] - bounds[0]
-    height = bounds[3] - bounds[1]
-    logger.info(f"Boundary dimensions - Width: {width:.2f}m, Height: {height:.2f}m")
+        if alpha_shape is None:
+            logger.error("Could not generate valid boundary with any alpha value")
+            return False
 
-    logger.info(f"Using actual boundary without inward offset")
+        try:
+            if isinstance(alpha_shape, Polygon):
+                boundary_line = alpha_shape.exterior
+                logger.info(f"Created single polygon boundary")
+            elif isinstance(alpha_shape, MultiPolygon):
+                largest_polygon = max(alpha_shape.geoms, key=lambda p: p.area)
+                boundary_line = largest_polygon.exterior
+                logger.info(f"Created multi-polygon boundary, selected largest polygon")
+            else:
+                logger.error(f"Unexpected geometry type: {type(alpha_shape)}")
+                return False
 
-    boundary_length = boundary_line.length
-    n_points = max(int(boundary_length / spacing_meters), 4)
-    logger.info(f"Boundary perimeter: {boundary_length:.2f}m, generating {n_points} boundary points")
+            bounds = alpha_shape.bounds
+            width = bounds[2] - bounds[0]
+            height = bounds[3] - bounds[1]
+            logger.info(f"Boundary dimensions - Width: {width:.2f}m, Height: {height:.2f}m")
 
-    boundary_points = [boundary_line.interpolate(i / n_points, normalized=True)
-                       for i in range(n_points)]
+            logger.info(f"Using actual boundary without inward offset")
 
-    boundary_points_coords = []
-    for point in boundary_points:
-        boundary_points_coords.append([point.x, point.y])
+            boundary_length = boundary_line.length
+            n_points = max(int(boundary_length / spacing_meters), 4)
+            logger.info(f"Boundary perimeter: {boundary_length:.2f}m, generating {n_points} boundary points")
 
-    boundary_points_coords = np.array(boundary_points_coords)
-    logger.info(f"Generated {len(boundary_points_coords)} original boundary points")
-    logger.info(f"Creating visualization plot")
-    
-    min_x = min(np.min(filtered_points_2d[:, 0]), np.min(boundary_points_coords[:, 0]))
-    max_x = max(np.max(filtered_points_2d[:, 0]), np.max(boundary_points_coords[:, 0]))
-    min_z = min(np.min(filtered_points_2d[:, 1]), np.min(boundary_points_coords[:, 1]))
-    max_z = max(np.max(filtered_points_2d[:, 1]), np.max(boundary_points_coords[:, 1]))
-    
-    center_x = (min_x + max_x) / 2
-    center_z = (min_z + max_z) / 2
-    span_x = max_x - min_x
-    span_z = max_z - min_z
-    
-    buffer_factor = 0.3
-    min_x = center_x - span_x/2 * (1 + buffer_factor)
-    max_x = center_x + span_x/2 * (1 + buffer_factor)
-    min_z = center_z - span_z/2 * (1 + buffer_factor)
-    max_z = center_z + span_z/2 * (1 + buffer_factor)
-    
-    plt.figure(figsize=(12, 10), dpi=150)
-    
-    sample_indices = np.random.choice(len(rotated_positions), size=min(len(rotated_positions) // 10, 5000), replace=False)
-    plt.scatter(rotated_positions[sample_indices, 0], rotated_positions[sample_indices, 2],
-                color='yellow', s=1.5, alpha=0.15, label='Original Points')
-    
-    plt.scatter(filtered_points_2d[:, 0], filtered_points_2d[:, 1],
-                color='#0BDA47', s=6, alpha=0.6, label='Filtered Points')
+            boundary_points = [boundary_line.interpolate(i / n_points, normalized=True)
+                            for i in range(n_points)]
 
-    x = boundary_points_coords[:, 0]
-    y = boundary_points_coords[:, 1]
+            boundary_points_coords = []
+            for point in boundary_points:
+                boundary_points_coords.append([point.x, point.y])
 
-    plt.plot(np.append(x, x[0]), np.append(y, y[0]), 
-             color='#57B9FF', linewidth=3, linestyle='-', label='Boundary')
-    
-    plt.scatter(x, y, color='darkblue', s=25, alpha=0.8, zorder=5)
-    
-    plt.title('Building Boundary from Point Cloud (Top View)', fontsize=16, fontweight='bold')
-    plt.xlabel('X (meters)', fontsize=14)
-    plt.ylabel('Z (meters)', fontsize=14)
-    plt.grid(True, alpha=0.3, linestyle='--')
-    plt.legend(loc='upper right', fontsize=12)
-    
-    plt.axis('equal')
-    
-    plt.xlim(min_x, max_x)
-    plt.ylim(min_z, max_z)
+            boundary_points_coords = np.array(boundary_points_coords)
+            logger.info(f"Generated {len(boundary_points_coords)} original boundary points")
+        except Exception as e:
+            logger.error(f"Error processing boundary geometry: {str(e)}")
+            return False
+            
+        try:
+            logger.info(f"Creating visualization plot")
+            
+            min_x = min(np.min(filtered_points_2d[:, 0]), np.min(boundary_points_coords[:, 0]))
+            max_x = max(np.max(filtered_points_2d[:, 0]), np.max(boundary_points_coords[:, 0]))
+            min_z = min(np.min(filtered_points_2d[:, 1]), np.min(boundary_points_coords[:, 1]))
+            max_z = max(np.max(filtered_points_2d[:, 1]), np.max(boundary_points_coords[:, 1]))
+            
+            center_x = (min_x + max_x) / 2
+            center_z = (min_z + max_z) / 2
+            span_x = max_x - min_x
+            span_z = max_z - min_z
+            
+            buffer_factor = 0.3
+            min_x = center_x - span_x/2 * (1 + buffer_factor)
+            max_x = center_x + span_x/2 * (1 + buffer_factor)
+            min_z = center_z - span_z/2 * (1 + buffer_factor)
+            max_z = center_z + span_z/2 * (1 + buffer_factor)
+            
+            plt.figure(figsize=(12, 10), dpi=150)
+            
+            sample_indices = np.random.choice(len(rotated_positions), size=min(len(rotated_positions) // 10, 5000), replace=False)
+            plt.scatter(rotated_positions[sample_indices, 0], rotated_positions[sample_indices, 2],
+                        color='yellow', s=1.5, alpha=0.15, label='Original Points')
+            
+            plt.scatter(filtered_points_2d[:, 0], filtered_points_2d[:, 1],
+                        color='#0BDA47', s=6, alpha=0.6, label='Filtered Points')
 
-    image_filename = boundary_file.replace('.json', '.png')
-    plt.savefig(image_filename, dpi=150, bbox_inches='tight')
-    plt.close()
-    logger.info(f"Saved visualization to {image_filename}")
+            x = boundary_points_coords[:, 0]
+            y = boundary_points_coords[:, 1]
 
-    points_to_save = boundary_points_coords
-    output_data = [
-        {
-            "x": format(point[0], '.4f'),
-            "z": format(point[1], '.4f')
-        }
-        for point in points_to_save
-    ]
+            plt.plot(np.append(x, x[0]), np.append(y, y[0]), 
+                    color='#57B9FF', linewidth=3, linestyle='-', label='Boundary')
+            
+            plt.scatter(x, y, color='darkblue', s=25, alpha=0.8, zorder=5)
+            
+            plt.title('Building Boundary from Point Cloud (Top View)', fontsize=16, fontweight='bold')
+            plt.xlabel('X (meters)', fontsize=14)
+            plt.ylabel('Z (meters)', fontsize=14)
+            plt.grid(True, alpha=0.3, linestyle='--')
+            plt.legend(loc='upper right', fontsize=12)
+            
+            plt.axis('equal')
+            
+            plt.xlim(min_x, max_x)
+            plt.ylim(min_z, max_z)
 
-    with open(boundary_file, 'w') as f:
-        json.dump(output_data, f, indent=2)
-    logger.info(f"Saved {len(output_data)} boundary points to {boundary_file}")
+            image_filename = boundary_file.replace('.json', '.png')
+            plt.savefig(image_filename, dpi=150, bbox_inches='tight')
+            plt.close()
+            logger.info(f"Saved visualization to {image_filename}")
+        except Exception as e:
+            logger.error(f"Error creating visualization: {str(e)}")
+            # Continue even if visualization fails
+
+        try:
+            points_to_save = boundary_points_coords
+            output_data = [
+                {
+                    "x": format(point[0], '.4f'),
+                    "z": format(point[1], '.4f')
+                }
+                for point in points_to_save
+            ]
+
+            with open(boundary_file, 'w') as f:
+                json.dump(output_data, f, indent=2)
+            logger.info(f"Saved {len(output_data)} boundary points to {boundary_file}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving boundary file: {str(e)}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in boundary generation: {str(e)}")
+        return False
+
 
 rotation_file_path = 'matrix_4_4.json'
 ply_file_path = 'ply/model_25032.ply'
 
 if __name__ == "__main__":
     """
-    This script processes PLY model points and generates boundary files:
+    Boundary Generation for 3D Architectural Models
+    
+    This script processes PLY model points and generates boundary files for various 
+    architectural structures including houses, apartments, greenhouses, and other buildings.
+    
+    The process includes:
+    1. Loading PLY file data
+    2. Applying rotation correction from matrix_4_4.json
+    3. Filtering points using Open3D statistical outlier removal
+    4. Generating alpha shape boundary with adaptive parameters
+    5. Creating visualization and saving boundary coordinates
     
     Input:
-    - PLY file: Contains 3D point data
+    - PLY file: Contains 3D point cloud data of the building
+    - matrix_4_4.json: Contains rotation matrix (created by rotation_correction.py)
     
     Output:
-    - boundary.json: Contains the calculated boundary points
-    - boundary.png: Visualization of PLY points and boundary
+    - boundary.json: Contains the calculated boundary points in XZ plane
+    - boundary.png: Visualization of original points, filtered points, and boundary
+    
+    Note: This script is designed to be fault-tolerant and will attempt multiple
+    alpha values if boundary generation fails with the initial values.
     """
 
     logger.info(f"Processing PLY file: {ply_file_path}...")
