@@ -112,26 +112,24 @@ def save_matrix_to_json(matrix, filename='matrix_4_4.json'):
 
 def get_rotation(ply_file_path, local_matrix_path='matrix_4_4.json'):
     """
-    Process a PLY file to extract a rotation matrix, save it to JSON and return it.
+    Process a PLY file to extract a rotation matrix and save it to JSON.
     
     Args:
         ply_file_path: Path to the PLY file
         local_matrix_path: Path to save the matrix JSON
         
     Returns:
-        list: The 4x4 rotation matrix as a flattened list for Three.js
+        None
     """
     matrix = process_ply_file(ply_file_path)
     if matrix:
         save_matrix_to_json(matrix, local_matrix_path)
-        return matrix
     else:
         placeholder_matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
         save_matrix_to_json(placeholder_matrix, local_matrix_path)
         logger.error("An error occurred. Placeholder matrix has been saved.")
-        return placeholder_matrix
 
 
 if __name__ == "__main__":
-     ply_file = "ply/model_18567.ply"
+     ply_file = "ply/model_25032.ply"
      get_rotation(ply_file)
