@@ -18,6 +18,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 np.random.seed(42)
 
+rotation_file_path = 'matrix_4_4.json'
+ply_file_path = 'ply/model_25032.ply'
+
 def load_file(file_path: str) -> dict:
     """
     Load data from a file based on extension
@@ -539,9 +542,6 @@ def generate_boundary_points_from_ply(ply_file_path, boundary_file, spacing_mete
         logger.error(f"Unexpected error in boundary generation: {str(e)}")
         return False
 
-
-rotation_file_path = 'matrix_4_4.json'
-ply_file_path = 'ply/model_25032.ply'
 
 if __name__ == "__main__":
     """
