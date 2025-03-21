@@ -222,6 +222,7 @@ def apply_rotation_matrix(positions, matrix):
     rotated_positions = np.zeros_like(positions)
     for i in range(len(positions)):
         rotated_positions[i] = rotation_matrix.dot(positions[i])
+        print(f"Point {i}: Before rotation: {positions[i]} | After rotation: {rotated_positions[i]}")
     
     logger.info("Rotation correction applied")
     return rotated_positions
@@ -639,7 +640,7 @@ if __name__ == "__main__":
     """
     #  24998
     # Input PLY file
-    ply_file_path = 'ply/model_18567.ply'
+    ply_file_path = 'ply/model_25032.ply'
 
     # Process the PLY file
     logger.info(f"Processing PLY file: {ply_file_path}...")
